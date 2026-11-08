@@ -63,6 +63,6 @@ def run_web():
     app.router.add_get("/", health)
     web.run_app(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8080")))
 
+# --- запуск ---
 if __name__ == "__main__":
-    threading.Thread(target=run_web, daemon=True).start()
     bot.run(TOKEN)
