@@ -1,6 +1,5 @@
 import os
 import asyncio
-import threading
 from aiohttp import web
 import discord
 from discord.ext import commands
@@ -8,27 +7,33 @@ from discord.ext import commands
 TOKEN = os.environ["DISCORD_TOKEN"]
 DEFAULT_COUNT = int(os.environ.get("SPAM_COUNT", "50"))
 DELAY = float(os.environ.get("DELAY", "0.7"))
+PORT = int(os.environ.get("PORT", "8080"))
 
 intents = discord.Intents.default()
 intents.message_content = True
-intents.members = True
+# intents.members = True  # не нужен для ЛС, не включай без нужды
+
 bot = commands.Bot(command_prefix="!", intents=intents)
+
 
 @bot.event
 async def on_ready():
     print(f"Бот поднят как {bot.user}", flush=True)
 
+
 @bot.command(name="target")
-async def target(ctx, user_id: int, count: int = None, *, text: str = None):
-    # порядок: !target <id> [сколько] <текст>
-    # если count не задан — текст идёт сразу после id
-    if text is None:
-        # значит второй аргумент — это текст, а не число
-        text = str(count) if count is not None else ""
-        count = DEFAULT_COUNT
-    if not text:
+async def target(ctx, user_id: int, *, args: str = ""):
+    if not args:
         await ctx.send("Формат: `!target <id> [сколько] <текст>`")
         return
+
+    parts = args.split(maxsplit=1)
+    if parts[0].isdigit() and len(parts) == 2:
+        count = int(parts[0])
+        text = parts[1]
+    else:
+        count = DEFAULT_COUNT
+        text = args
 
     try:
         target_user = await bot.fetch_user(user_id)
@@ -55,14 +60,25 @@ async def target(ctx, user_id: int, count: int = None, *, text: str = None):
 
     await ctx.send(f"Готово: {count} сообщений → {target_user}")
 
+
 async def health(request):
     return web.Response(text="ok")
 
-def run_web():
+
+async def main():
     app = web.Application()
     app.router.add_get("/", health)
-    web.run_app(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8080")))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", PORT)
+    await site.start()
+    print(f"Health-сервер на порту {PORT}", flush=True)
 
-# --- запуск ---
+    try:
+        await bot.start(TOKEN)
+    finally:
+        await runner.cleanup()
+
+
 if __name__ == "__main__":
-    bot.run(TOKEN)
+    asyncio.run(main())
